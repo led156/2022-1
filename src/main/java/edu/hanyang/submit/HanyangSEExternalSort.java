@@ -39,57 +39,37 @@ public class HanyangSEExternalSort implements ExternalSort {
     public void sort(String infile, String outfile, String tmpdir, int blocksize, int nblocks) throws IOException {
     	this.nblocks = nblocks;
     	this.blocksize = blocksize;
-        int nElement = nblocks;
+        int nElement = blocksize * nblocks;
         
         
 		// 1) initial phase : nElement 만큼의 tuple 을 저장할 ArrayList 생성.
-    	ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
-    		
+        ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
+		
     	DataInputStream is = new DataInputStream(
      		   new BufferedInputStream(
      				   new FileInputStream(infile), blocksize));
         DataOutputStream os = new DataOutputStream(
      		   new BufferedOutputStream(
-     				   new FileOutputStream(tmpdir + File.separator + "initial.DATA"), blocksize));
-        int cnt;
-        int data = -1;
-        MutableTriple<Integer, Integer, Integer> tmpT = new MutableTriple<>();
-        // dataArr 에 데이터 추가. nElement 만큼 읽고, 어레이가 다 차거나/다 읽으면 tmpdir(initial) 를 통해 해당 어레이 파일화
-        while( is.available() > 0 ) {
-        	cnt = 1;
-        	while(dataArr.size() < nElement && (data = is.readInt()) != -1) { /*array is not full*/
-        		// (a) add array
-        		if(cnt%3 == 1) {
-            		tmpT.setLeft(data);
-            		cnt++;
-            	}
-            	else if(cnt%3 == 2) {
-            		tmpT.setMiddle(data);
-            		cnt++;
-            	}
-            	else {
-            		tmpT.setRight(data);
-            		dataArr.add(tmpT);	// 삼항 모두 완료.. 어레이에 넣음.
-            		cnt++;
-            	}
-        	}
-        	// (b) array -> out file
-        	// (i) sort
-        	Collections.sort(dataArr);
-        	// (ii) write
-        	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
-        		tmpT.setLeft(m.getLeft());
-        		tmpT.setMiddle(m.getMiddle());
-        		tmpT.setRight(m.getRight());
-        		try {
-					os.writeBytes(tmpT.toString());
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-        	}
-        	dataArr.removeAll(dataArr);
-        }
+     				   new FileOutputStream(tmpdir + "test.txt"), blocksize));
         
+        // dataArr 에 데이터 추가. nElement 만큼 읽고, 어레이가 다 차거나/다 읽으면 tmpdir(initial) 를 통해 해당 어레이 파일화
+        DataManager dm = new DataManager(is);
+        
+        while (!dm.isEOF) {
+        	// (a) add array item
+        	while (dataArr.size() < nElement && !dm.isEOF) {
+        		dataArr.add(dm.getTuple());
+        	}
+        	
+        	// (b) array -> out file
+        		// (i) sort
+        	// ...
+        		// (ii) write
+        	for (MutableTriple<Integer, Integer, Integer> m : dataArr) {
+        		os.writeBytes(m.toString());
+        	}
+        	dataArr.clear();
+        }
         is.close();
         os.close();
     	
