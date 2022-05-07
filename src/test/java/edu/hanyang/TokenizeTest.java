@@ -3,6 +3,7 @@ package edu.hanyang;
 import io.github.hyerica_bdml.indexer.Tokenizer;
 import edu.hanyang.submit.HanyangSETokenizer;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
+@Ignore("Delete this line to unit test stage 1")
 public class TokenizeTest {
 
     static List<String[]> results;
