@@ -43,7 +43,7 @@ public class HanyangSEExternalSort implements ExternalSort {
     	this.nblocks = nblocks;
     	this.blocksize = blocksize;
     	this.tmpdir = tmpdir;
-        int nElement = nblocks*blocksize / (3*4);
+        int nElement = nblocks*blocksize / (3*Integer.SIZE);
         
 		// 1) initial phase : nElement 만큼의 tuple 을 저장할 ArrayList 생성.
         ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
@@ -51,44 +51,49 @@ public class HanyangSEExternalSort implements ExternalSort {
     	DataInputStream is = new DataInputStream(
      		   new BufferedInputStream(
      				   new FileInputStream(infile), blocksize));
-        int data = -1;
+
+        int tmpLeft = 0;
+        int tmpMiddle = 0;
+        int tmpRight = 0;
         
-        System.out.println("start");
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
         // dataArr 에 데이터 추가. nElement 만큼 읽고, 어레이가 다 차거나/다 읽으면 tmpdir(initial) 를 통해 해당 어레이 파일화
        
+        while (is.available() > 0) {
+        	// (a) add array
+        	tmpLeft = is.readInt();
+        	tmpMiddle = is.readInt();
+        	tmpRight = is.readInt();
+        	dataArr.add(new MutableTriple<Integer, Integer, Integer>(tmpLeft, tmpMiddle, tmpRight));
+     		
+     		// (b) array -> out file
+     		if (dataArr.size() >= nElement) {
+            	DataOutputStream os = new DataOutputStream(
+              		   new BufferedOutputStream(
+              				 new FileOutputStream(tmpdir + String.valueOf("initial") + File.separator + String.valueOf(nFile) + String.valueOf(".data"))));
+            	// (i) sort
+             	Collections.sort(dataArr);
+             	// (ii) write
+             	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
+             		os.writeInt(m.getLeft());
+             		os.writeInt(m.getMiddle());
+             		os.writeInt(m.getRight());
+             		os.flush();
+             	}
+             	dataArr.clear();
+             	os.close();
+             	nFile++;
+             	tmpLeft = 0; tmpMiddle = 0; tmpRight = 0;
+     		}
+        }
         
-    	while( is.available() > 0 ) {
-    		int tmpLeft = 0;
-            int tmpMiddle = 0;
-            int tmpRight = 0;
-         	int cnt = 1;
-         	while(dataArr.size() < nElement && is.available() > 0 && (data = is.readInt()) != -1) { /*array is not full*/
-         		// (a) add array
-         		if(cnt%3 == 1) {
-         			//tmpT.setLeft(data);
-         			tmpLeft = data;
-            	}
-            	else if(cnt%3 == 2) {
-            		//tmpT.setMiddle(data);
-            		tmpMiddle = data;
-            	}
-            	else {
-            		//tmpT.setRight(data);
-            		tmpRight = data;
-            		dataArr.add(new MutableTriple<Integer, Integer, Integer>(tmpLeft, tmpMiddle, tmpRight));	// 삼항 모두 완료.. 어레이에 넣음.
-         		}
-         		cnt++;
-         	}
-         	// (b) array -> out file
-         	System.out.println("one initial array create");
+        // (b) array -> out file
+ 		if (dataArr.size() > 0) {
         	DataOutputStream os = new DataOutputStream(
           		   new BufferedOutputStream(
           				 new FileOutputStream(tmpdir + String.valueOf("initial") + File.separator + String.valueOf(nFile) + String.valueOf(".data"))));
-         	// (i) sort
-        	System.out.println("start sort");
+        	// (i) sort
          	Collections.sort(dataArr);
-         	System.out.println("end sort");
          	// (ii) write
          	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
          		os.writeInt(m.getLeft());
@@ -99,12 +104,11 @@ public class HanyangSEExternalSort implements ExternalSort {
          	dataArr.clear();
          	os.close();
          	nFile++;
-         }
-         is.close();
+ 		}
+ 		is.close();
         
     	/// 2) n-way merge
-        System.out.println("_externalMergeSort(tmpdir, outfile, 0);");
-    	_externalMergeSort(tmpdir, outfile, 0);    	
+    	_externalMergeSort(tmpdir, outfile, 0);
     }
     
     private void _externalMergeSort(String tmpDir, String outputFile, int step) throws IOException {
@@ -112,7 +116,6 @@ public class HanyangSEExternalSort implements ExternalSort {
     	prevStep = (step == 0) ? "initial" : String.valueOf(step - 1);
     	List<DataInputStream> files = new ArrayList<DataInputStream>();
     	nFile = 0;
-    	
     	
     	// 파일 리스트 저장.
     	File[] fileArr = (new File(tmpDir + File.separator + String.valueOf(prevStep))).listFiles();
@@ -128,9 +131,7 @@ public class HanyangSEExternalSort implements ExternalSort {
     			files.add(dos);
     		}
     		// ...
-    		
     		n_way_merge(files, outputFile);
-    		System.out.println("n_way_merge" + "in EMS"+step+" length");
     	}
     	
     	
@@ -152,9 +153,9 @@ public class HanyangSEExternalSort implements ExternalSort {
     				nFile++;
     				System.out.println("n_way_merge" + "in EMS"+step);
     				cnt = 0;
+    				files.clear();
     			}
     		}
-    		System.out.println("_externalMergeSort(tmpdir, outfile, "+ (step+1) +");");
     		_externalMergeSort(tmpDir, outputFile, step+1);
     	}
     }
