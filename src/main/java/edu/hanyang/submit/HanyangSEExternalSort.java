@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -16,6 +17,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.*;
+import java.io.*;
 
 import io.github.hyerica_bdml.indexer.ExternalSort;
 import org.apache.commons.lang3.tuple.MutableTriple;
@@ -43,32 +46,28 @@ public class HanyangSEExternalSort implements ExternalSort {
     	this.nblocks = nblocks;
     	this.blocksize = blocksize;
     	this.tmpdir = tmpdir;
-        int nElement = nblocks*blocksize / (3*Integer.SIZE);
+    	
+    	int nElement = blocksize * nblocks / 12;
+    	MutableTriple<Integer, Integer, Integer> tmp;
         
 		// 1) initial phase : nElement 만큼의 tuple 을 저장할 ArrayList 생성.
-        ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
-		
+        ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
     	DataInputStream is = new DataInputStream(
      		   new BufferedInputStream(
      				   new FileInputStream(infile), blocksize));
+    	DataOutputStream os;
 
-        int tmpLeft = 0;
-        int tmpMiddle = 0;
-        int tmpRight = 0;
         
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
         // dataArr 에 데이터 추가. nElement 만큼 읽고, 어레이가 다 차거나/다 읽으면 tmpdir(initial) 를 통해 해당 어레이 파일화
-       
         while (is.available() > 0) {
         	// (a) add array
-        	tmpLeft = is.readInt();
-        	tmpMiddle = is.readInt();
-        	tmpRight = is.readInt();
-        	dataArr.add(new MutableTriple<Integer, Integer, Integer>(tmpLeft, tmpMiddle, tmpRight));
-     		
+        	tmp = new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt());
+        	dataArr.add(tmp);
+        	
      		// (b) array -> out file
      		if (dataArr.size() >= nElement) {
-            	DataOutputStream os = new DataOutputStream(
+            	os = new DataOutputStream(
               		   new BufferedOutputStream(
               				 new FileOutputStream(tmpdir + String.valueOf("initial") + File.separator + String.valueOf(nFile) + String.valueOf(".data"))));
             	// (i) sort
@@ -80,16 +79,14 @@ public class HanyangSEExternalSort implements ExternalSort {
              		os.writeInt(m.getRight());
              		os.flush();
              	}
-             	dataArr.clear();
              	os.close();
+             	dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
              	nFile++;
-             	tmpLeft = 0; tmpMiddle = 0; tmpRight = 0;
      		}
         }
-        
         // (b) array -> out file
  		if (dataArr.size() > 0) {
-        	DataOutputStream os = new DataOutputStream(
+        	os = new DataOutputStream(
           		   new BufferedOutputStream(
           				 new FileOutputStream(tmpdir + String.valueOf("initial") + File.separator + String.valueOf(nFile) + String.valueOf(".data"))));
         	// (i) sort
@@ -101,12 +98,13 @@ public class HanyangSEExternalSort implements ExternalSort {
          		os.writeInt(m.getRight());
          		os.flush();
          	}
-         	dataArr.clear();
+         	//dataArr.clear();
          	os.close();
          	nFile++;
  		}
  		is.close();
-        
+ 		dataArr = new ArrayList<>();
+        System.out.println("complete intial");
     	/// 2) n-way merge
     	_externalMergeSort(tmpdir, outfile, 0);
     }
@@ -190,6 +188,20 @@ public class HanyangSEExternalSort implements ExternalSort {
      		if (!dm.isEOF) {queue.add(dm);}
     	}
     	os.close();
+    }
+    
+    public static long estimateBestSizeOfBlocks(File filetobesorted) {
+        long sizeoffile = filetobesorted.length();
+        final int MAXTEMPFILES = 1024;
+        long blocksize = sizeoffile / MAXTEMPFILES ;
+        long freemem = Runtime.getRuntime().freeMemory();
+        if( blocksize < freemem/2)
+            blocksize = freemem/2;
+        else {
+            if(blocksize >= freemem) 
+              System.err.println("We expect to run out of memory. ");
+        }
+        return blocksize;
     }
 }
 
