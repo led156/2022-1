@@ -102,7 +102,6 @@ public class HanyangSEExternalSort implements ExternalSort {
     private void _externalMergeSort(String tmpDir, String outputFile, int step) throws IOException {
     	String prevStep = (step == 0) ? "initial" : String.valueOf(step - 1);
     	List<DataInputStream> files = new ArrayList<DataInputStream>(nblocks-1);
-    	List<List<DataInputStream>> fileList = new ArrayList<List<DataInputStream>>();
     	int nFile = 0;
     	
     	// fileArr : store file list
@@ -137,42 +136,17 @@ public class HanyangSEExternalSort implements ExternalSort {
     			
     			
     			if (cnt >= nblocks - 1) {	// each cnt = n -> merge
-    				fileList.add(files);
-    				files = new ArrayList<DataInputStream>(nblocks-1);
+    				n_way_merge(files, tmpDir + String.valueOf(step) + File.separator + String.valueOf(nFile) + ".data");
+    				nFile++;
     				cnt = 0;
-    				
-//    				n_way_merge(files, tmpDir + String.valueOf(step) + File.separator + String.valueOf(nFile) + ".data");
-//    				nFile++;
-//    				cnt = 0;
-//    				files = new ArrayList<DataInputStream>(nblocks-1);
+    				files = new ArrayList<DataInputStream>(nblocks-1);
     			}
     		}
     		
     		if(files.size() > 0) {
-    			fileList.add(files);
-    			cnt = 0;
-    			
-//    			n_way_merge(files, tmpDir + String.valueOf(step) + File.separator + String.valueOf(nFile) + ".data");
-//				nFile++;
-//				cnt = 0;
-    		}
-    		
-    		ArrayList<Thread> threads = new ArrayList<>();
-    		for (List<DataInputStream> f : fileList) {
-    			String tmpOutputFile = tmpDir + String.valueOf(step) + File.separator + String.valueOf(nFile) + ".data";
-    			Thread t = new Thread(new N_way(f, tmpOutputFile));
-    			t.start();
-    			threads.add(t);
-    			nFile++;
-    		}
-    		
-    		for (int i = 0; i < threads.size(); i++) {
-    			Thread t = threads.get(i);
-    			try {
-					t.join();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+    			n_way_merge(files, tmpDir + String.valueOf(step) + File.separator + String.valueOf(nFile) + ".data");
+				nFile++;
+				cnt = 0;
     		}
     		
     		_externalMergeSort(tmpDir, outputFile, step+1);
@@ -241,52 +215,3 @@ class DataManager {
 	}
 	
 }
-
-class N_way implements Runnable {
-	List<DataInputStream> files;
-	String outputFile;
-	
-	public N_way(List<DataInputStream> files, String outputFile) {
-		this.files = files;
-		this.outputFile = outputFile;
-	}
-	
-	@Override
-	public void run() {
-		try {
-			n_way_merge();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	private void n_way_merge() throws IOException {
-    	PriorityQueue<DataManager> queue = new PriorityQueue<>(files.size(), new Comparator<DataManager>() {
-    																			public int compare(DataManager o1, DataManager o2) {
-    																				return o1.tuple.compareTo(o2.tuple);
-    																			}
-    																		});
-    	
-    	// add DataManager to queue
-    	for(DataInputStream is : files) {
-        	queue.add(new DataManager(is));
-    	}
-    	
-    	DataOutputStream os = new DataOutputStream(
-	      		   new BufferedOutputStream(
-	      				 new FileOutputStream(outputFile)));
-    	
-    	// get DataManager by sequential
-    	while (queue.size() != 0) {
-    		DataManager dm = queue.poll();
-    		MutableTriple<Integer, Integer, Integer> tmp = dm.getTuple();
-    		os.writeInt(tmp.getLeft());
-     		os.writeInt(tmp.getMiddle());
-     		os.writeInt(tmp.getRight());
-     		os.flush();
-     		if (!dm.isEOF) {queue.add(dm);}
-    	}
-    	os.close();
-	}
-}
-
