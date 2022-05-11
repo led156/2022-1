@@ -40,14 +40,14 @@ public class HanyangSEExternalSort implements ExternalSort {
     	this.blocksize = blocksize;
     	
     	int nFile = 0;
-    	int nElement = blocksize * nblocks / 12;
+    	int nElement = blocksize * nblocks / (3*Integer.SIZE);
     	
 		// 1) initial phase
         ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
     	DataInputStream is = new DataInputStream(
      		   new BufferedInputStream(
      				   new FileInputStream(infile), blocksize));
-    	DataOutputStream os;
+    	
         
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
         
@@ -58,7 +58,7 @@ public class HanyangSEExternalSort implements ExternalSort {
         	
      		// (b) array -> out file
      		if (dataArr.size() >= nElement) {
-            	os = new DataOutputStream(
+     			DataOutputStream os = new DataOutputStream(
               		   new BufferedOutputStream(
               				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
             	// (i) sort
@@ -77,7 +77,7 @@ public class HanyangSEExternalSort implements ExternalSort {
         }
         // (b) array -> out file
  		if (dataArr.size() > 0) {
-        	os = new DataOutputStream(
+ 			DataOutputStream os = new DataOutputStream(
           		   new BufferedOutputStream(
           				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
         	// (i) sort
@@ -89,7 +89,7 @@ public class HanyangSEExternalSort implements ExternalSort {
          		os.writeInt(m.getRight());
          		os.flush();
          	}
-         	//dataArr.clear();
+         	dataArr = null;
          	os.close();
          	nFile++;
  		}
