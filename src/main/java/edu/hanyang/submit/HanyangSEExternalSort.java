@@ -50,49 +50,31 @@ public class HanyangSEExternalSort implements ExternalSort {
     	
         
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
+        int nRelation = (int) Math.ceil(is.available() / (blocksize * nblocks));
         
         // make arrayList & sort -> make initial run
-        while (is.available() > 0) {
+        for (int i = 0; i < nRelation; i++) {
         	// (a) add array
         	dataArr.add(new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt()));
         	
      		// (b) array -> out file
-     		if (dataArr.size() >= nElement) {
-     			DataOutputStream os = new DataOutputStream(
-              		   new BufferedOutputStream(
-              				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
-            	// (i) sort
-             	Collections.sort(dataArr);
-             	// (ii) write
-             	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
-             		os.writeInt(m.getLeft());
-             		os.writeInt(m.getMiddle());
-             		os.writeInt(m.getRight());
-             		os.flush();
-             	}
-             	os.close();
-             	dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
-             	nFile++;
-     		}
+        	DataOutputStream os = new DataOutputStream(
+           		   new BufferedOutputStream(
+           				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
+         	// (i) sort
+          	Collections.sort(dataArr);
+          	// (ii) write
+          	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
+          		os.writeInt(m.getLeft());
+          		os.writeInt(m.getMiddle());
+          		os.writeInt(m.getRight());
+          		os.flush();
+          	}
+          	os.close();
+          	dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
+          	nFile++;
         }
-        // (b) array -> out file
- 		if (dataArr.size() > 0) {
- 			DataOutputStream os = new DataOutputStream(
-          		   new BufferedOutputStream(
-          				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
-        	// (i) sort
-         	Collections.sort(dataArr);
-         	// (ii) write
-         	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
-         		os.writeInt(m.getLeft());
-         		os.writeInt(m.getMiddle());
-         		os.writeInt(m.getRight());
-         		os.flush();
-         	}
-         	dataArr = null;
-         	os.close();
-         	nFile++;
- 		}
+        
  		is.close();
  		
     	/// 2) n-way merge
