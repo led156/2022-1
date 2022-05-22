@@ -5,7 +5,6 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 
 import io.github.hyerica_bdml.indexer.BPlusTree;
-import scala.reflect.internal.Trees.Block;
 
 
 public class HanyangSEBPlusTree implements BPlusTree {
@@ -15,6 +14,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	ByteBuffer buffer;
 	int maxKeys;
 	RandomAccessFile raf;
+	
+	int rootindex;
 	
     /**
      * B+ tree를 open하는 함수(파일을 열고 준비하는 단계 구현)
@@ -43,18 +44,36 @@ public class HanyangSEBPlusTree implements BPlusTree {
      */
     @Override
     public void insert(int key, int value) throws IOException {
-        Block block = searchNode(key);
+        Block block = searchNode(key);	// 해당 밸류가 있는 leaf 블럭의 인덱스를 찾아 해당 블럭을 받아옴.
         
-        if (block.nkeys + 1 > maxKeys) {
-        	Block newnode = split(block, key, val);
-        	insertInternal(block.parent, newnode.my_pos);
+        if (block.nkeys + 1 > maxKeys) {	// 블럭이 꽉 찬 상태. 
+        	Block newnode = split(block, key, val);		// 1) 블럭을 n/2 만큼 나눠준다.
+        	insertInternal(block.parent, newnode.my_pos);	// 2) 패런츠에 insert
         }
-        else {
+        else {	// 블럭이 꽉 차지 않은 상태.
         	// ...
+        	// leaf 블럭에 해당 밸류를 추가한다.
         }
     }
 
-    /**
+    private Block searchNode(int key) {	// search 는 키가 가진 밸류를 찾아오지만, 해당 메소드는 키가 있는 노드(블럭)을 찾아온다.
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	private void insertInternal(Object parent, int my_pos) {
+		// TODO Auto-generated method stub
+		// if 패런트 블럭의 포인터가 다 찼다면.. ?
+    	
+    	// 포인터가 다 차지 않았다면
+	}
+
+	private Block split(Block block, int key, int val) {	// 블럭을 split 해주고 새로 생긴 블럭을 리턴하는 메소드.
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	/**
      * B+ tree에 있는 데이터를 탐색하는 함수
      * @param key 탐색할 key
      * @return 탐색된 value 값
@@ -62,19 +81,29 @@ public class HanyangSEBPlusTree implements BPlusTree {
      */
     @Override
     public int search(int key) throws IOException {
-        Block rb = readBlock(rootindex);
+        Block rb = readBlock(rootindex);	// 루트 블럭을 가져온다.
         return _search(rb, key);
     }
     
-    public int _search(Block b, int key) throws IOException {
-    	if (b.type == 1) {
+    private Block readBlock(int rootindex2) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public int _search(Block b, int key) throws IOException {
+    	if (b.type == 1) {	// non-leaf
     		// ...
-    		if (block.keys[i] < key) {
-    			child = readBlock(b.vals[i]);
+    		for (int i = 0; i < ; i++) {	// 블럭을 하나씩 탐색.
+    			if (block.keys[i] < key) {		// 만약 블럭의 해당 키 값이 찾고있는 키 값보다 작다면, child 블럭으로 감.
+        			child = readBlock(b.vals[i]);
+        			break;
+        		}
     		}
+    		_search(child, key);
+    		
     		// ..
     	}
-    	else {
+    	else {	// leaf
     		/* binary or linear search */
     		// if exists,
     		return val;
@@ -91,4 +120,13 @@ public class HanyangSEBPlusTree implements BPlusTree {
     public void close() throws IOException {
         // TODO: your code here...
     }
+}
+
+class Block {
+	public Object[] vals;
+	public int type;
+	public int my_pos;
+	public Object parent;
+	public int nkeys;
+	
 }
