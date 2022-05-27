@@ -124,21 +124,31 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		}
 			
 		
-		// else parent가 null 이 아니라
+		// else parent가 null 이 아니고 
 		else {
 			Block pBlock = new Block(parent, treefile, maxKeys);
 			
 			// if 패런트 블럭의 포인터가 다 찼다면.. ?
 			if (pBlock.nkeys + 1 > maxKeys) {
 				// 받은 my_pos의 앞 키값과 자신의 키값을 합쳐 정렬 -> split
-				block = split(pBlock, block.keys[0], my_pos);
+				
+				// Lsplit
+				
+				// Rsplit
+				
+				// Middle key로 나눈다.
+				
+				
 				// 나머지 포인터들 재연결
-				//	block에 대해 insertExternal
+				// propagation. pushup
+				
+				// i) Middle key는 L과 R의 패런츠 노드의 키가 되고 양옆으로 L, R 끼고 있음.
+				// 
+				
 			}
 	    	
 	    	// 포인터가 다 차지 않았다면
 			else {
-				
 				int i = 0;
 				int key = block.keys[0];
 				for (i = 0; i < pBlock.nkeys; i++) {
@@ -146,13 +156,12 @@ public class HanyangSEBPlusTree implements BPlusTree {
             			break;
             		}
             	}
-				
 				pBlock.insertKeys(i, key, my_pos);
 			}
 		}
 	}
 
-	private Block split(Block block, int key, int val) {	// 블럭을 split 해주고 새로 생긴 블럭을 리턴하는 메소드.
+	private Block split(Block block, int key, int val) {	// 블럭을 split 해주고 새로 생긴 블럭을 리턴하는 메소드. leaf인 노드임.
 		Block newBlock = new Block(maxKeys);
 		
 		// block의 key와 새로운 key를 합쳐 정렬, list에 b의 key를 저장.
@@ -162,21 +171,29 @@ public class HanyangSEBPlusTree implements BPlusTree {
     	// 해당 List를 정렬.
     	Arrays.sort(list);
     	int idx = Arrays.asList(list).indexOf(key);
-		
     	
     	
-		
+    	int[] listt = Arrays.copyOf(block.vals, maxKeys + 2);
+    	for (int i = maxKeys+1; i > idx; i++) {
+    		listt[i] = listt[i-1];
+    	}
+    	listt[idx] = val;
+    	
 		int n = (int) Math.ceil(maxKeys/2);
-		if (idx < n) {	// in original
-			
-		}
-		else { // in new
-			
-		}
+		
+		int[] keyList = new int[maxKeys];
+		keyList = Arrays.copyOfRange(list, 0, n);
 		// 정렬된 List를 n/2 만큼 originalB. -> 덮어쓰
-		block.setKeys(oKeyList);
+		block.setKeys(keyList);
+		keyList = Arrays.copyOfRange(list, n, list.length);
 		// 나머지 n/2 를 newB. -> 덮어쓰기
-		newBlock.setKeys(nKeyList);
+		newBlock.setKeys(keyList);
+		
+		int[] valList = new int[maxKeys+1];
+		valList = Arrays.copyOfRange(listt, 0, n);
+		block.setVals(valList);
+		valList = Arrays.copyOfRange(listt, n, listt.length);
+		newBlock.setVals(valList);
 		
 		return newBlock;
 	}
@@ -341,6 +358,10 @@ class Block {
     
     public void setKeys(int[] list) {
 		this.keys = list;
+	}
+    
+    public void setVals(int[] list) {
+		this.vals = list;
 	}
     
     public void save() {
