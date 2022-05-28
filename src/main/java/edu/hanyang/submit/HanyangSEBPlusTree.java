@@ -130,6 +130,7 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			
 			// if 패런트 블럭의 포인터가 다 찼다면.. ?
 			if (pBlock.nkeys + 1 > maxKeys) {
+				
 				// 받은 my_pos의 앞 키값과 자신의 키값을 합쳐 정렬 -> split
 				
 				// Lsplit
@@ -196,6 +197,60 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		newBlock.setVals(valList);
 		
 		return newBlock;
+	}
+	
+	private int split(Block lBlock, Block rBlock, int key, int val) {
+		int middleKey;
+		
+		// block의 key와 새로운 key를 합쳐 정렬, list에 b의 key를 저장.
+		int[] list = Arrays.copyOf(lBlock.keys, maxKeys + 1);
+    	// newK를 넣고,
+    	list[maxKeys] = key;
+    	// 해당 List를 정렬.
+    	Arrays.sort(list);
+    	int idx = Arrays.asList(list).indexOf(key);
+    	
+    	
+    	int[] listt = Arrays.copyOf(lBlock.vals, maxKeys + 2);
+    	for (int i = maxKeys+1; i > idx; i++) {
+    		listt[i] = listt[i-1];
+    	}
+    	listt[idx] = val;
+    	
+    	int n = (int) Math.ceil(maxKeys/2);
+    	if (maxKeys%2 == 0) {
+    		middleKey = list[n];
+    		// lB 의 key 는 0~n-1까지, vals 는 0~n까지
+    		// rB 의 key 는 n+1~maxKeys, vals 는 n+1~maxKeys+1까지
+    		int[] keyList = new int[maxKeys];
+    		keyList = Arrays.copyOfRange(list, 0, n);
+    		lBlock.setKeys(keyList);
+    		keyList = Arrays.copyOfRange(list, n+1, list.length);
+    		rBlock.setKeys(keyList);
+    		
+    		int[] valList = new int[maxKeys+1];
+    		valList = Arrays.copyOfRange(listt, 0, n+1);
+    		lBlock.setVals(valList);
+    		valList = Arrays.copyOfRange(listt, n+1, listt.length);
+    		rBlock.setVals(valList);
+    	}
+    	else {
+    		middleKey = list[n-1];
+    		// lB 의 key 는 0~n-2까지, vals 는 0~n-1까지
+    		// rB 의 key 는 n~maxKeys, vals 는 n~maxKeys+1까지
+    		int[] keyList = new int[maxKeys];
+    		keyList = Arrays.copyOfRange(list, 0, n-1);
+    		lBlock.setKeys(keyList);
+    		keyList = Arrays.copyOfRange(list, n, list.length);
+    		rBlock.setKeys(keyList);
+    		
+    		int[] valList = new int[maxKeys+1];
+    		valList = Arrays.copyOfRange(listt, 0, n);
+    		lBlock.setVals(valList);
+    		valList = Arrays.copyOfRange(listt, n, listt.length);
+    		rBlock.setVals(valList);
+    	}
+    	return middleKey;
 	}
 	
 	private Block readBlock(int pointer) {	// pointer를 통해 해당 블럭을 읽어오는 메소드.
