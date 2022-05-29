@@ -36,9 +36,11 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	ByteBuffer buffer;
 	int maxKeys;
 	RandomAccessFile raf;
+	RandomAccessFile mraf;
 	Serializer ser;
 	int serializeSize;
 	String treefile;
+	String metafile;
 	
 	int rootindex = 0;
 	
@@ -58,22 +60,24 @@ public class HanyangSEBPlusTree implements BPlusTree {
         this.buffer = ByteBuffer.wrap(buf);
         this.maxKeys = (blocksize - 16) / 8;
         this.treefile = treefile;
-        
+        this.metafile = metafile;
+        mraf = new RandomAccessFile(metafile, "rw");
         raf = new RandomAccessFile(treefile, "rw");
         ser = new Serializer();
     	
         serializeSize = (ser.serialize(new Block(maxKeys))).length;
         
-        // (i) meta 파일 읽고 rootindex 읽어오기.
         
         
     	// (ii) root 만들기. or 불러오기. - buffer.
-        if (raf.length() > 0) {	// 불러오
-        	loadBlock(rootindex);
-        }
-        else {
+        if (raf.length() == 0) {
         	Block root = new Block(rootindex, maxKeys);
         	saveBlock(root);
+        }
+        else {
+        	// (i) meta 파일 읽고 rootindex 읽어오기.
+        	mraf.seek(0);
+        	rootindex = mraf.readInt();
         }
     }
     
@@ -101,7 +105,17 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+    }
+    
+    public void saveRidx(int idx) {
+    	try {
+    		this.rootindex = idx;
+    		mraf.seek(0);
+        	mraf.writeInt(idx);
+    	} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 
     /**
@@ -126,7 +140,7 @@ public class HanyangSEBPlusTree implements BPlusTree {
         		pBlock.setKeys(0, newBlock.keys[0]);
         		pBlock.setVals(0, block.my_pos);
         		pBlock.setVals(1, newBlock.my_pos);
-        		pBlock.nkeys = 1;
+        		pBlock.setNkeys(1);
         		block.parent = pBlock.my_pos;
         		newBlock.parent = pBlock.my_pos;
         		saveBlock(block);
@@ -134,7 +148,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
         		saveBlock(pBlock);
         		System.out.println(Arrays.toString(block.keys) + Arrays.toString(pBlock.keys) + Arrays.toString(newBlock.keys));
         		System.out.println(Arrays.toString(block.vals) + Arrays.toString(pBlock.vals) + Arrays.toString(newBlock.vals));
-        		rootindex = pBlock.my_pos;
+        		//rootindex = pBlock.my_pos;
+        		saveRidx(pBlock.my_pos);
         	}
         	else {
         		newBlock.parent = block.parent;
@@ -181,14 +196,16 @@ public class HanyangSEBPlusTree implements BPlusTree {
 				ppBlock.setKeys(0, middle);
 				ppBlock.setVals(0, pBlock.my_pos);
 				ppBlock.setVals(1, newBlock.my_pos);
+				ppBlock.setNkeys(1);
         		pBlock.parent = ppBlock.my_pos;
         		newBlock.parent = ppBlock.my_pos;
         		saveBlock(pBlock);
         		saveBlock(newBlock);
         		saveBlock(ppBlock);
-        		System.out.println(Arrays.toString(pBlock.keys) + Arrays.toString(ppBlock.keys) + Arrays.toString(newBlock.keys));
-        		System.out.println(Arrays.toString(pBlock.vals) + Arrays.toString(ppBlock.vals) + Arrays.toString(newBlock.vals));
-        		rootindex = ppBlock.my_pos;
+        		System.out.println(Arrays.toString(pBlock.keys) + pBlock.nkeys + Arrays.toString(ppBlock.keys) + ppBlock.nkeys + Arrays.toString(newBlock.keys)+ newBlock.nkeys );
+        		System.out.println(Arrays.toString(pBlock.vals) + pBlock.nkeys + Arrays.toString(ppBlock.vals) + ppBlock.nkeys + Arrays.toString(newBlock.vals)+ newBlock.nkeys );
+        		//rootindex = ppBlock.my_pos;
+        		saveRidx(ppBlock.my_pos);
 			}
 			else {	// 아니다 패런트 노드는 부모 노드가 있다.
 				// insertInternal
@@ -292,8 +309,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			}
 		}
 		block.setVals(maxKeys, newBlock.my_pos);
-		block.nkeys = n;
-		newBlock.nkeys = maxKeys + 1 - n;
+		block.setNkeys(n);
+		newBlock.setNkeys(maxKeys + 1 - n);
 		
 		return newBlock;
 	}
@@ -363,8 +380,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
 					rBlock.setVals(i, 0);
 				}
 			}
-			lBlock.nkeys = n;
-			rBlock.nkeys = maxKeys + 1 - n;
+			lBlock.setNkeys(n);
+			rBlock.setNkeys(maxKeys - n);
 		}
 		else {
 			for (int i = 0; i < maxKeys+1; i++) {
@@ -391,11 +408,9 @@ public class HanyangSEBPlusTree implements BPlusTree {
 					rBlock.setVals(i, 0);
 				}
 			}
-			lBlock.nkeys = n - 1;
-			rBlock.nkeys = maxKeys + 1 - n - 1;
+			lBlock.setNkeys(n - 1);
+			rBlock.setNkeys(maxKeys - (n - 1)); 
 		}
-		
-		
 		
 		return middleKey;
 	}
@@ -414,19 +429,16 @@ public class HanyangSEBPlusTree implements BPlusTree {
     }
 
 	public int _search(Block b, int key) throws IOException {
-		
 		int val = -1;
 		
-		
-		
 		while (b.type == 1) {
-			System.out.println("Search in : " + Arrays.toString(b.keys));
 			int cnt = 0;
 			for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
     			if (b.keys[i] <= key) {		
     				cnt++;
         		}
     		}
+			System.out.println("Search in : " + Arrays.toString(b.keys) + cnt);
 			b = loadBlock(b.vals[cnt]);
 		}
 		
@@ -437,24 +449,6 @@ public class HanyangSEBPlusTree implements BPlusTree {
     			break;
     		}
 		}
-		
-//    	if (b.type == 1) {	// non-leaf
-//    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
-//    			if (b.keys[i] <= key) {		
-//    				cnt++;
-//        		}
-//    		}
-//    		val = _search(loadBlock(b.vals[cnt]), key);
-//    	}
-//    	else {	// leaf
-//    		/* binary or linear search */
-//    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
-//    			if (b.keys[i] == key) {		// 
-//        			val = b.vals[i];
-//        			break;
-//        		}
-//    		}
-//    	}
     	return val;
     }
 
@@ -466,35 +460,15 @@ public class HanyangSEBPlusTree implements BPlusTree {
     public void close() throws IOException {
         // TODO: your code here...
     	raf.close();
+//    	mraf.seek(0);
+//    	mraf.writeInt(rootindex);
+    	mraf.close();
     }
     
     
     public static void main(String[] args) throws IOException, ClassNotFoundException {
-//    	System.out.println(Integer.SIZE*(5+(10*2)));
-//    	RandomAccessFile r = new RandomAccessFile("serial.data", "rw");
-//		Serializer ser = new Serializer();
-//    	System.out.println(r.length());
-//    	System.out.println(r.getFilePointer());
-//    	Block block = new Block((int) r.length(), 10);
-//    	block.keys[0] = 3412;
-//    	block.keys[1] = 343;
-//    	block.keys[6] = 343;
-//    	Block block2 = new Block(10);
-//    	block2.parent = 1;
-//    	
-//    	byte[] write = ser.serialize(block2);
-//    	r.write(write);
-//    	System.out.println(r.getFilePointer());
-//    	System.out.println(r.length());
-//    	System.out.println(write.length);
-//    	System.out.println("-------");
-//    	System.out.println((ser.serialize(new Block(10))).length);
-//		r.close();
-		
-		
-		
 		HanyangSEBPlusTree tree = new HanyangSEBPlusTree();
-		tree.open("", "try.tree", 52, 10);
+		tree.open("sdf.meta", "try.tree", 52, 10);
  
 		tree.insert(5, 10);
 		tree.insert(6, 15);
@@ -520,11 +494,11 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		tree.close();
 		
 		tree = new HanyangSEBPlusTree();
-		tree.open("", "try.tree", 52, 10);
+		tree.open("sdf.meta", "try.tree", 52, 10);
  
 		// Check search function
-		System.out.println(tree.search(7));
-		System.out.println(tree.search(6));
+		System.out.println(tree.search(357));
+		System.out.println(tree.search(557));
 		System.out.println(tree.search(4));
 //		assertEquals(tree.search(7), 1);
 //		assertEquals(tree.search(8), 5);
@@ -641,4 +615,7 @@ class Block implements Serializable {
     	this.vals[idx] = val;
     }
 	
+    public void setNkeys(int n) {
+    	this.nkeys = n;
+    }
 }
