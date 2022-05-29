@@ -1,5 +1,8 @@
 package edu.hanyang.submit;
 
+
+
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -19,6 +22,8 @@ import java.lang.instrument.Instrumentation;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+
+import org.apache.commons.lang3.ArrayUtils;
 
 import io.github.hyerica_bdml.indexer.BPlusTree;
 
@@ -85,10 +90,18 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		}
     }
     
-    public void saveBlock(Block block) throws IOException {
-		byte[] arrays = ser.serialize(block);
-		raf.seek(block.my_pos);
-		raf.write(arrays);
+    public void saveBlock(Block block) {
+    	try {
+    		byte[] arrays = ser.serialize(block);
+    		int length = (int) raf.length();
+    		raf.seek(block.my_pos);
+    		raf.write(arrays);
+    		System.out.println("arrays size: "+arrays.length+"write size: "+(raf.length()- length));
+    	} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
     }
 
     /**
@@ -102,12 +115,30 @@ public class HanyangSEBPlusTree implements BPlusTree {
         Block block = searchNode(key);	// 해당 key가 들어갈만한 노드 블럭을 찾아온다. 이제 block은 무족권 leaf 노드~.
         if (block.nkeys + 1 > maxKeys) {	// 블럭이 꽉 찬 상태. 
         	Block newBlock = split(block, key, value);		// 1) 블럭을 n/2 만큼 나눠준다.
+        	saveBlock(block);
+        	saveBlock(newBlock);
         	// 2) 새로운 노드를 패런츠에 insert
         	if (block.my_pos == rootindex) {	// block이 root라면 -> 부모 노드가 없으면.
         		// newBlock의 제일 앞 키를 따오고
         		// vals[0] 과 vals[1]을 block, newBlock의 포인터로 지정한다.
+        		System.out.println("raf.length()"+raf.length());
+        		Block pBlock = new Block((int) raf.length(), maxKeys, 1);
+        		pBlock.setKeys(0, newBlock.keys[0]);
+        		pBlock.setVals(0, block.my_pos);
+        		pBlock.setVals(1, newBlock.my_pos);
+        		pBlock.nkeys = 1;
+        		block.parent = pBlock.my_pos;
+        		newBlock.parent = pBlock.my_pos;
+        		saveBlock(block);
+        		saveBlock(newBlock);
+        		saveBlock(pBlock);
+        		System.out.println(Arrays.toString(block.keys) + Arrays.toString(pBlock.keys) + Arrays.toString(newBlock.keys));
+        		System.out.println(Arrays.toString(block.vals) + Arrays.toString(pBlock.vals) + Arrays.toString(newBlock.vals));
+        		rootindex = pBlock.my_pos;
         	}
         	else {
+        		newBlock.parent = block.parent;
+        		saveBlock(newBlock);
         		insertInternal(block.parent, newBlock.keys[0], newBlock.my_pos);
         	}
         }
@@ -117,6 +148,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
         	int i = 0;
         	if (block.nkeys == 0) {
         		block.insertKeys(i, key, value);
+        		System.out.println(Arrays.toString(block.keys));
+        		saveBlock(block);
         	}
         	else {
         		for (i = 0; i < block.nkeys; i++) {
@@ -125,26 +158,42 @@ public class HanyangSEBPlusTree implements BPlusTree {
             		}
             	}
             	block.insertKeys(i, key, value);
+            	System.out.println(Arrays.toString(block.keys));
+            	saveBlock(block);
         	}
-        	
-        	
         }
     }
     
-    private void insertInternal(int parent, int key, int vals) {
+    private void insertInternal(int parent, int key, int vals) throws IOException {
     	Block pBlock = loadBlock(parent);
     	
 		// parent가 꽉 찬 노드
 		if (pBlock.nkeys + 1 > maxKeys) {
 			// split
-			Block newBlock = null;
+			Block newBlock = new Block((int) raf.length(), maxKeys, 1);
 			int middle = split(pBlock, newBlock, key, vals);
+			saveBlock(pBlock);
+			saveBlock(newBlock);
 			if (pBlock.my_pos == rootindex) {	// 만약 parent node가 root
 				// key를 넣고.
 	    		// vals[0] 과 vals[1]을 block, newBlock의 포인터로 지정한다.
+				Block ppBlock = new Block((int) raf.length(), maxKeys, 1);
+				ppBlock.setKeys(0, middle);
+				ppBlock.setVals(0, pBlock.my_pos);
+				ppBlock.setVals(1, newBlock.my_pos);
+        		pBlock.parent = ppBlock.my_pos;
+        		newBlock.parent = ppBlock.my_pos;
+        		saveBlock(pBlock);
+        		saveBlock(newBlock);
+        		saveBlock(ppBlock);
+        		System.out.println(Arrays.toString(pBlock.keys) + Arrays.toString(ppBlock.keys) + Arrays.toString(newBlock.keys));
+        		System.out.println(Arrays.toString(pBlock.vals) + Arrays.toString(ppBlock.vals) + Arrays.toString(newBlock.vals));
+        		rootindex = ppBlock.my_pos;
 			}
 			else {	// 아니다 패런트 노드는 부모 노드가 있다.
 				// insertInternal
+				newBlock.parent = pBlock.parent;
+        		saveBlock(newBlock);
 				insertInternal(pBlock.parent, middle, newBlock.my_pos);
 			}
 		}
@@ -160,26 +209,33 @@ public class HanyangSEBPlusTree implements BPlusTree {
         			break;
         		}
         	}
-			pBlock.insertKeys(i, key, vals);
+			pBlock.insertNodes(i, key, vals);
+			saveBlock(pBlock);
+			System.out.println("pb"+Arrays.toString(pBlock.keys));
+			System.out.println("pbv"+Arrays.toString(pBlock.vals));
 		}
     }
 
 	private Block searchNode(int key) {	// search 는 키가 가진 밸류를 찾아오지만, 해당 메소드는 키가 있는 노드(블럭)을 찾아온다. // 해당 key가 들어갈만한 노드 블럭을 찾아온다.
     	// root 노드부터 탐색.
     	Block block = loadBlock(rootindex);
-    	int type = block.type;
+    	System.out.println("rootindex"+rootindex);
     	
     	// non-leaf가 아닐때까지 이를 반복하여 결국 리프 노드를 뱉어내야함. // non-leaf 일 동안 반복.
 		// i) 돌고 돌아 첫번째키가 해당 포인트보다 작다면 포인터를 따라간다.
-    	while (type == 1) {
+    	while (block.type == 1) {
+    		int i;
     		// nkeys 만큼 순회하고,	
-        	for (int i = 0; i < block.nkeys; i++) {
+        	for (i = 0; i < block.nkeys; i++) {
         		// 만약 keys[i] > key 라면
         		if (block.keys[i] > key) {
+        			System.out.println("serachNode - load : "+i);
         			block = loadBlock(block.vals[i]);
-        			type = block.type;
         			break;
         		}
+        	}
+        	if (i == block.nkeys) {
+        		block = loadBlock(block.vals[i]);
         	}
     	}
 		return block;
@@ -188,37 +244,56 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	
 	private Block split(Block block, int key, int val) throws IOException {	// 블럭을 split 해주고 새로 생긴 블럭을 리턴하는 메소드. leaf인 노드임.
 		Block newBlock = new Block((int) raf.length(), maxKeys);
+		int n = (int) Math.ceil(maxKeys/2+1);
 		
-		// block의 key와 새로운 key를 합쳐 정렬, list에 b의 key를 저장.
-		int[] list = Arrays.copyOf(block.keys, maxKeys + 1);
-    	// newK를 넣고,
-    	list[maxKeys] = key;
-    	// 해당 List를 정렬.
-    	Arrays.sort(list);
-    	int idx = Arrays.asList(list).indexOf(key);
-    	
-    	
-    	int[] listt = Arrays.copyOf(block.vals, maxKeys + 2);
-    	for (int i = maxKeys+1; i > idx; i++) {
-    		listt[i] = listt[i-1];
-    	}
-    	listt[idx] = val;
-    	
-		int n = (int) Math.ceil(maxKeys/2);
+		int[] keylist = Arrays.copyOf(block.keys, maxKeys + 1);
+		keylist[maxKeys] = key;
 		
-		int[] keyList = new int[maxKeys];
-		keyList = Arrays.copyOfRange(list, 0, n);
-		// 정렬된 List를 n/2 만큼 originalB. -> 덮어쓰
-		block.setKeys(keyList);
-		keyList = Arrays.copyOfRange(list, n, list.length);
-		// 나머지 n/2 를 newB. -> 덮어쓰기
-		newBlock.setKeys(keyList);
+		Arrays.sort(keylist);
+		int idx = ArrayUtils.indexOf(keylist, key);
+		System.out.println("list::" + n + ": "+Arrays.toString(keylist));
 		
-		int[] valList = new int[maxKeys+1];
-		valList = Arrays.copyOfRange(listt, 0, n);
-		block.setVals(valList);
-		valList = Arrays.copyOfRange(listt, n, listt.length);
-		newBlock.setVals(valList);
+		int[] vallist = Arrays.copyOf(block.vals, maxKeys + 2);
+		for (int i = maxKeys+1; i > idx; i--) {
+			vallist[i] = vallist[i-1];
+		}
+		vallist[idx] = val;
+		
+		
+		for (int i = 0; i < maxKeys; i++) {
+			if (i < n) {
+				block.setKeys(i, keylist[i]);
+				if (i == n-1 && maxKeys%2 == 0) {
+					newBlock.setKeys(i, 0);
+				}
+				else {
+					newBlock.setKeys(i, keylist[n+i]);
+				}
+			}
+			else {
+				block.setKeys(i, 0);
+				newBlock.setKeys(i, 0);
+			}
+		}
+		
+		for (int i = 0; i < maxKeys+1; i++) {
+			if (i < n) {
+				block.setVals(i, vallist[i]);
+				if (i == n-1 && maxKeys%2 == 1) {
+					newBlock.setVals(i, 0);
+				}
+				else {
+					newBlock.setVals(i, vallist[n+i]);
+				}
+			}
+			else {
+				block.setVals(i, 0);
+				newBlock.setVals(i, 0);
+			}
+		}
+		block.setVals(maxKeys, newBlock.my_pos);
+		block.nkeys = n;
+		newBlock.nkeys = maxKeys + 1 - n;
 		
 		return newBlock;
 	}
@@ -231,66 +306,100 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	// (3) newBlock의 키값이 들어간 Idx를 찾아 newBlock의 포인터값을 vals에 집어넣음.
 	// (4) 재정렬된 keys를 Left, Middle, Right로 나눈다. (포인터까지 나눠지기 때문에, 다시 생각할필요X)
 	private int split(Block lBlock, Block rBlock, int key, int val) {	// 블럭을 split해주고 중간값을 리턴해주는 메소드.
-		int middleKey;
-		
+		int middleKey = 0;
+		int n = (int) Math.ceil(maxKeys/2+1);
+	
 		// (1)
 		// block의 key와 새로운 key를 합쳐 정렬, list에 b의 key를 저장.
-		int[] list = Arrays.copyOf(lBlock.keys, maxKeys + 1);
+		int[] keylist = Arrays.copyOf(lBlock.keys, maxKeys + 1);
     	// newK를 넣고,
-    	list[maxKeys] = key;
+		keylist[maxKeys] = key;
     	// (2)
     	// 해당 List를 정렬.
-    	Arrays.sort(list);
+    	Arrays.sort(keylist);
     	// (3)
-    	int idx = Arrays.asList(list).indexOf(key);
+    	int idx = ArrayUtils.indexOf(keylist, key);
+    	System.out.println("list::" + n + ": "+Arrays.toString(keylist));
     	
+    	int[] vallist = Arrays.copyOf(lBlock.vals, maxKeys + 2);
+    	for (int i = maxKeys+1; i > idx+1; i--) {
+			vallist[i] = vallist[i-1];
+		}
+		vallist[idx+1] = val;
     	
-    	int[] listt = Arrays.copyOf(lBlock.vals, maxKeys + 2);
-    	for (int i = maxKeys+1; i > idx; i++) {
-    		listt[i] = listt[i-1];
-    	}
-    	listt[idx] = val;
-    	
-    	// (4)
-    	int n = (int) Math.ceil(maxKeys/2);
-    	if (maxKeys%2 == 0) {
-    		middleKey = list[n];
-    		// lB 의 key 는 0~n-1까지, vals 는 0~n까지
-    		// rB 의 key 는 n+1~maxKeys, vals 는 n+1~maxKeys+1까지
-    		int[] keyList = new int[maxKeys];
-    		keyList = Arrays.copyOfRange(list, 0, n);
-    		lBlock.setKeys(keyList);
-    		keyList = Arrays.copyOfRange(list, n+1, list.length);
-    		rBlock.setKeys(keyList);
-    		
-    		int[] valList = new int[maxKeys+1];
-    		valList = Arrays.copyOfRange(listt, 0, n+1);
-    		lBlock.setVals(valList);
-    		valList = Arrays.copyOfRange(listt, n+1, listt.length);
-    		rBlock.setVals(valList);
-    	}
-    	else {
-    		middleKey = list[n-1];
-    		// lB 의 key 는 0~n-2까지, vals 는 0~n-1까지
-    		// rB 의 key 는 n~maxKeys, vals 는 n~maxKeys+1까지
-    		int[] keyList = new int[maxKeys];
-    		keyList = Arrays.copyOfRange(list, 0, n-1);
-    		lBlock.setKeys(keyList);
-    		keyList = Arrays.copyOfRange(list, n, list.length);
-    		rBlock.setKeys(keyList);
-    		
-    		int[] valList = new int[maxKeys+1];
-    		valList = Arrays.copyOfRange(listt, 0, n);
-    		lBlock.setVals(valList);
-    		valList = Arrays.copyOfRange(listt, n, listt.length);
-    		rBlock.setVals(valList);
-    	}
-    	return middleKey;
+		
+		if (maxKeys%2 == 1) { //N은 짝수
+			for (int i = 0; i < maxKeys+1; i++) {
+				if (i < n) {
+					lBlock.setKeys(i, keylist[i]);
+					if (i == n-1) {
+						rBlock.setKeys(i, 0);
+					}
+					else {
+						rBlock.setKeys(i, keylist[n+1+i]);
+					}
+				}
+				else if (i == n) {
+					middleKey = keylist[i];
+				}
+				else {
+					lBlock.setKeys(i-1, 0);
+					rBlock.setKeys(i-1, 0);
+				}
+			}
+			
+			for (int i = 0; i < maxKeys+1; i++) {
+				if (i <= n) {
+					lBlock.setVals(i, vallist[i]);
+					if (i == n) {
+						rBlock.setVals(i, 0);
+					}
+					else {
+						rBlock.setVals(i, vallist[n+1+i]);
+					}
+				}
+				else {
+					lBlock.setVals(i, 0);
+					rBlock.setVals(i, 0);
+				}
+			}
+			lBlock.nkeys = n;
+			rBlock.nkeys = maxKeys + 1 - n;
+		}
+		else {
+			for (int i = 0; i < maxKeys+1; i++) {
+				if (i < n-1) {
+					lBlock.setKeys(i, keylist[i]);
+					rBlock.setKeys(i, keylist[n+i]);
+				}
+				else if (i == n-1) {
+					middleKey = keylist[i];
+				}
+				else {
+					lBlock.setKeys(i-1, 0);
+					rBlock.setKeys(i-1, 0);
+				}
+			}
+			
+			for (int i = 0; i < maxKeys+1; i++) {
+				if (i < n) {
+					lBlock.setVals(i, vallist[i]);
+					rBlock.setVals(i, vallist[n+i]);
+				}
+				else {
+					lBlock.setVals(i, 0);
+					rBlock.setVals(i, 0);
+				}
+			}
+			lBlock.nkeys = n - 1;
+			rBlock.nkeys = maxKeys + 1 - n - 1;
+		}
+		
+		
+		
+		return middleKey;
 	}
 	
-	private Block readBlock(int pointer) {	// pointer를 통해 해당 블럭을 읽어오는 메소드.
-		return loadBlock(pointer);
-	}
 
 	/**
      * B+ tree에 있는 데이터를 탐색하는 함수
@@ -300,34 +409,52 @@ public class HanyangSEBPlusTree implements BPlusTree {
      */
     @Override
     public int search(int key) throws IOException {
-        Block rb = readBlock(rootindex);	// 루트 블럭을 가져온다.
+        Block rb = loadBlock(rootindex);	// 루트 블럭을 가져온다.
         return _search(rb, key);
     }
-    
-    
 
 	public int _search(Block b, int key) throws IOException {
+		
 		int val = -1;
-    	if (b.type == 1) {	// non-leaf
-    		// ...
-    		Block child = null;
-    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
-    			if (b.keys[i] >= key) {		// 만약 블럭의 해당 키 값이 찾고있는 키 값보다 작다면, child 블럭으로 감.
-        			child = readBlock(b.vals[i]);
-        			break;
+		
+		
+		
+		while (b.type == 1) {
+			System.out.println("Search in : " + Arrays.toString(b.keys));
+			int cnt = 0;
+			for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
+    			if (b.keys[i] <= key) {		
+    				cnt++;
         		}
     		}
-    		val = _search(child, key);
-    	}
-    	else {	// leaf
-    		/* binary or linear search */
-    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
-    			if (b.keys[i] == key) {		// 
-        			val = b.vals[i];
-        			break;
-        		}
+			b = loadBlock(b.vals[cnt]);
+		}
+		
+		System.out.println("Search in leaf : " + Arrays.toString(b.keys));
+		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
+			if (b.keys[i] == key) {		// 
+    			val = b.vals[i];
+    			break;
     		}
-    	}
+		}
+		
+//    	if (b.type == 1) {	// non-leaf
+//    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
+//    			if (b.keys[i] <= key) {		
+//    				cnt++;
+//        		}
+//    		}
+//    		val = _search(loadBlock(b.vals[cnt]), key);
+//    	}
+//    	else {	// leaf
+//    		/* binary or linear search */
+//    		for (int i = 0; i < b.nkeys; i++) {	// 블럭을 하나씩 탐색.
+//    			if (b.keys[i] == key) {		// 
+//        			val = b.vals[i];
+//        			break;
+//        		}
+//    		}
+//    	}
     	return val;
     }
 
@@ -343,26 +470,80 @@ public class HanyangSEBPlusTree implements BPlusTree {
     
     
     public static void main(String[] args) throws IOException, ClassNotFoundException {
-    	System.out.println(Integer.SIZE*(5+(10*2)));
-    	RandomAccessFile r = new RandomAccessFile("serial.data", "rw");
-		Serializer ser = new Serializer();
-    	System.out.println(r.length());
-    	System.out.println(r.getFilePointer());
-    	Block block = new Block((int) r.length(), 10);
-    	block.keys[0] = 3412;
-    	block.keys[1] = 343;
-    	block.keys[6] = 343;
-    	Block block2 = new Block(10);
-    	block2.parent = 1;
-    	
-    	byte[] write = ser.serialize(block2);
-    	r.write(write);
-    	System.out.println(r.getFilePointer());
-    	System.out.println(r.length());
-    	System.out.println(write.length);
-    	System.out.println("-------");
-    	System.out.println((ser.serialize(new Block(10))).length);
-		r.close();
+//    	System.out.println(Integer.SIZE*(5+(10*2)));
+//    	RandomAccessFile r = new RandomAccessFile("serial.data", "rw");
+//		Serializer ser = new Serializer();
+//    	System.out.println(r.length());
+//    	System.out.println(r.getFilePointer());
+//    	Block block = new Block((int) r.length(), 10);
+//    	block.keys[0] = 3412;
+//    	block.keys[1] = 343;
+//    	block.keys[6] = 343;
+//    	Block block2 = new Block(10);
+//    	block2.parent = 1;
+//    	
+//    	byte[] write = ser.serialize(block2);
+//    	r.write(write);
+//    	System.out.println(r.getFilePointer());
+//    	System.out.println(r.length());
+//    	System.out.println(write.length);
+//    	System.out.println("-------");
+//    	System.out.println((ser.serialize(new Block(10))).length);
+//		r.close();
+		
+		
+		
+		HanyangSEBPlusTree tree = new HanyangSEBPlusTree();
+		tree.open("", "try.tree", 52, 10);
+ 
+		tree.insert(5, 10);
+		tree.insert(6, 15);
+		tree.insert(4, 20);
+		tree.insert(7, 1);
+		tree.insert(8, 5);
+		tree.insert(17, 7);
+		tree.insert(30, 8);
+		tree.insert(1, 8);
+		
+		tree.insert(58, 1);
+		tree.insert(25, 8);
+		tree.insert(96, 32);
+		tree.insert(21, 8);
+		tree.insert(9, 98);
+		
+		tree.insert(57, 54);
+		tree.insert(157, 54);
+		tree.insert(247, 54);
+		tree.insert(357, 254);
+		tree.insert(557, 54);
+		
+		tree.close();
+		
+		tree = new HanyangSEBPlusTree();
+		tree.open("", "try.tree", 52, 10);
+ 
+		// Check search function
+		System.out.println(tree.search(7));
+		System.out.println(tree.search(6));
+		System.out.println(tree.search(4));
+//		assertEquals(tree.search(7), 1);
+//		assertEquals(tree.search(8), 5);
+//		assertEquals(tree.search(17), 7);
+//		assertEquals(tree.search(30), 8);
+//		assertEquals(tree.search(1), 8);
+//		assertEquals(tree.search(58), 1);
+//		assertEquals(tree.search(25), 8);
+//		assertEquals(tree.search(96), 32);
+//		assertEquals(tree.search(21), 8);
+//		assertEquals(tree.search(9), 98);
+//		assertEquals(tree.search(57), 54);
+//		assertEquals(tree.search(157), 54);
+//		assertEquals(tree.search(247), 54);
+//		assertEquals(tree.search(357), 254);
+//		assertEquals(tree.search(557), 54);
+		
+		
+		tree.close();
     }
 }
 
@@ -402,7 +583,17 @@ class Block implements Serializable {
     	keys = new int[maxKeys];
     }
     
-    public Block(int pos, int maxKeys) {	// 새로운 노드를 만드는 행
+    public void insertNodes(int idx, int key, int value) {
+    	for (int i = nkeys; i > idx; i--) {
+    		keys[i] = keys[i-1];
+    		vals[i+1] = vals[i];
+    	}
+    	keys[idx] = key;
+    	vals[idx+1] = value;
+    	nkeys++;
+	}
+
+	public Block(int pos, int maxKeys) {	// 새로운 노드를 만드는 행
     	this.type = 0;
     	this.my_pos = pos;
     	this.nkeys = 0;
@@ -411,14 +602,23 @@ class Block implements Serializable {
     	keys = new int[maxKeys];
     }
     
+    public Block(int pos, int maxKeys, int type) {	// 새로운 노드를 만드는 행, non-leaf
+    	this.type = type;
+    	this.my_pos = pos;
+    	this.nkeys = 0;
+    	this.maxKeys = maxKeys;
+    	vals = new int[maxKeys+1];
+    	keys = new int[maxKeys];
+    }
+    
     public void insertKeys(int idx, int key, int value) {
-    	if (this.type != 1) {
+    	if (this.type == 1) {	// non - leaf
     		vals[nkeys+1] = vals[nkeys];
     	}
     	
     	for (int i = nkeys; i > idx; i--) {
     		keys[i] = keys[i-1];
-    		vals[i] = keys[i-1];
+    		vals[i] = vals[i-1];
     	}
     	keys[idx] = key;
     	vals[idx] = value;
@@ -429,8 +629,16 @@ class Block implements Serializable {
 		this.keys = list;
 	}
     
+    public void setKeys(int idx, int key) {
+    	this.keys[idx] = key;
+    }
+    
     public void setVals(int[] list) {
 		this.vals = list;
 	}
+    
+    public void setVals(int idx, int val) {
+    	this.vals[idx] = val;
+    }
 	
 }
