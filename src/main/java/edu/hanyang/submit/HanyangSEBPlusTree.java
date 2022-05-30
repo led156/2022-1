@@ -227,7 +227,7 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		for (int i = 0; i < maxKeys+1; i++) {
 			if (i < n) {
 				block.setVals(i, vallist[i]);
-				if (i == n-1 && maxKeys%2 == 1) {
+				if (i == n-1 && maxKeys%2 == 0) {
 					newBlock.setVals(i, 0);
 				}
 				else {
@@ -284,7 +284,7 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			}
 			
 			for (int i = 0; i < maxKeys+1; i++) {
-				if (i <= n) {
+				if (i < n+1) {
 					lBlock.setVals(i, vallist[i]);
 					if (i == n) {
 						rBlock.setVals(i, 0);
