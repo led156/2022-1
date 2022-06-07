@@ -32,6 +32,18 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	
 	int rootindex = 0;
 	
+	public void printTree() throws IOException {
+		int filelength = (int) raf.length();
+		mraf.seek(0); 
+		System.out.println(mraf.readInt());
+		for (int i = 0; i < filelength/serializeSize; i++) {
+			Block block = loadBlock(i*serializeSize);
+			System.out.println(i*serializeSize + "type:"+block.type + "nkeys:"+block.nkeys + "pBlock:"+block.parent+"\t" 
+					+Arrays.toString(block.keys)+Arrays.toString(block.vals)+"\t");
+		}
+		System.out.println();
+	}
+	
     /**
      * B+ tree를 open하는 함수(파일을 열고 준비하는 단계 구현)
      * @param metafile B+ tree의 메타정보 저장(저장할거 없으면 안써도 됨)
@@ -207,7 +219,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			vallist[i] = vallist[i-1];
 		}
 		vallist[idx] = val;
-		
+		newBlock.setVals(maxKeys, block.vals[maxKeys]);
+		block.setVals(maxKeys, newBlock.my_pos);
 		for (int i = 0; i < maxKeys; i++) {
 			if (i < n) {
 				block.setKeys(i, keylist[i]);
@@ -224,7 +237,7 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			}
 		}
 		
-		for (int i = 0; i < maxKeys+1; i++) {
+		for (int i = 0; i < maxKeys; i++) {
 			if (i < n) {
 				block.setVals(i, vallist[i]);
 				if (i == n-1 && maxKeys%2 == 0) {
@@ -239,7 +252,6 @@ public class HanyangSEBPlusTree implements BPlusTree {
 				newBlock.setVals(i, 0);
 			}
 		}
-		block.setVals(maxKeys, newBlock.my_pos);
 		block.setNkeys(n);
 		newBlock.setNkeys(maxKeys + 1 - n);
 		
@@ -330,6 +342,12 @@ public class HanyangSEBPlusTree implements BPlusTree {
 			rBlock.setNkeys(maxKeys - (n - 1)); 
 		}
 		
+		for (int i = 0; i < rBlock.nkeys+1; i++) {
+			Block eBlock = loadBlock(rBlock.vals[i]);
+			eBlock.parent = rBlock.my_pos;
+			saveBlock(eBlock);
+		}
+		
 		return middleKey;
 	}
 	
@@ -369,10 +387,19 @@ public class HanyangSEBPlusTree implements BPlusTree {
 		// search until block is leaf node
 		while (block.type == 1) {
 			int cnt = 0;
-			for (int i = 0; i < block.nkeys; i++) {	
-    			if (block.keys[i] <= key) {		
-    				cnt++;
-        		}
+			for (int i = 0; i < block.nkeys; i++) {
+				if (block.keys[i] == key) {
+					cnt = i+1;
+					break;
+				}
+				else if (block.keys[i] > key) {
+					cnt = i;
+					break;
+				}
+				if (i == block.nkeys - 1) {
+					cnt = block.nkeys;
+					break;
+				}
     		}
 			block = loadBlock(block.vals[cnt]);
 		}
