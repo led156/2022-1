@@ -68,9 +68,10 @@ public class HanyangSEBPlusTree implements BPlusTree {
     	
         serializeSize = (ser.serialize(new Block(maxKeys))).length;
         
-        if (raf.length() == 0) {
+        if (mraf.length() <= 0 || raf.length() <= 0) {
         	Block root = new Block(rootindex, maxKeys);
         	saveBlock(root);
+        	saveRidx(root.my_pos);
         }
         else {
         	mraf.seek(0);
