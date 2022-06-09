@@ -40,7 +40,7 @@ public class HanyangSEExternalSort implements ExternalSort {
     	this.blocksize = blocksize;
     	
     	int nFile = 0;
-    	int nElement = blocksize * nblocks / (3*Integer.SIZE);
+    	int nElement = blocksize * nblocks / (24);	// R's size = nElement * 12
     	
 		// 1) initial phase
         ArrayList<MutableTriple<Integer, Integer, Integer>> dataArr = new ArrayList<>(nElement);
@@ -50,14 +50,44 @@ public class HanyangSEExternalSort implements ExternalSort {
     	
         
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
-        int nRelation = (int) Math.ceil(is.available() / (blocksize * nblocks));
+        int isSize = is.available();
+        int nRemain = (isSize/24) % nElement;
+        int nRelation = (isSize/24 - nRemain)/nElement;
+        
         
         // make arrayList & sort -> make initial run
         for (int i = 0; i < nRelation; i++) {
         	// (a) add array
-        	dataArr.add(new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt()));
+        	for (int j = 0; j < nElement; j++) {
+        		dataArr.add(new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt()));
+        	}
         	
      		// (b) array -> out file
+        	DataOutputStream os = new DataOutputStream(
+           		   new BufferedOutputStream(
+           				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
+         	// (i) sort
+          	Collections.sort(dataArr);
+          	
+          	// (ii) write
+          	for(MutableTriple<Integer, Integer, Integer> m : dataArr) {
+          		os.writeInt(m.getLeft());
+          		os.writeInt(m.getMiddle());
+          		os.writeInt(m.getRight());
+          		os.flush();
+          	}
+          	os.close();
+          	dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
+          	nFile++;
+        }
+        
+        if (nRemain > 0 && is.available() > 0) {
+        	// (a) add array
+        	for (int j = 0; j < nRemain; j++) {
+            	dataArr.add(new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt()));
+            }
+        	
+        	// (b) array -> out file
         	DataOutputStream os = new DataOutputStream(
            		   new BufferedOutputStream(
            				 new FileOutputStream(tmpdir + "initial" + File.separator + String.valueOf(nFile) + ".data")));
@@ -71,7 +101,7 @@ public class HanyangSEExternalSort implements ExternalSort {
           		os.flush();
           	}
           	os.close();
-          	dataArr = new ArrayList<MutableTriple<Integer, Integer, Integer>>(nElement);
+          	dataArr = null;
           	nFile++;
         }
         
