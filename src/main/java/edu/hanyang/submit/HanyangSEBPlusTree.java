@@ -262,8 +262,8 @@ public class HanyangSEBPlusTree implements BPlusTree {
 	
 	private int split(Block lBlock, Block rBlock, int key, int val) {	// // split non-leaf node
 		int middleKey = 0;
-		int n = (int) Math.ceil(maxKeys/2+1);
-	
+		int n = (int) Math.ceil((double)(maxKeys+1)/2);
+		
 		int[] keylist = Arrays.copyOf(lBlock.keys, maxKeys + 1);
 		keylist[maxKeys] = key;
     	Arrays.sort(keylist);
