@@ -48,22 +48,14 @@ public class HanyangSEExternalSort implements ExternalSort {
     	DataInputStream is = new DataInputStream(
      		   new BufferedInputStream(
      				   new FileInputStream(infile), blocksize));
-    	
         
         Files.createDirectories(Paths.get(tmpdir + String.valueOf("initial") + File.separator));
-        //int isSize = is.available() / Integer.SIZE;
-        //int nRemain = (isSize/12) % nElement;
-        //int nRelation = (isSize/12 - nRemain*nElement)/nElement;
-//        int nRelation = isSize / (nElement*3);
-//        int nRemain = isSize % (nElement*3);
         
         int NofInt = is.available() / 4;
         int nRelation = NofInt / (nElement*3);
-        int nRemain = NofInt % (nElement*3);
+        int nRemain = (NofInt % (nElement*3))/3;
         
-        //System.out.println("first size : "+is.available()+"\n read : "+is.readInt()+"\t second size : "+is.available());
-        
-        System.out.println("is size = "+is.available()+"\tNofInt = "+NofInt+"\tnRelation = "+nRelation+"\tnRemain = "+nRemain);
+        //System.out.println("is size = "+is.available()+"\tNofInt = "+NofInt+"\tnRelation = "+nRelation+"\tnRemain = "+nRemain);
         
         
         // make arrayList & sort -> make initial run
@@ -94,7 +86,7 @@ public class HanyangSEExternalSort implements ExternalSort {
         
         if (nRemain > 0 && is.available() > 0) {
         	// (a) add array
-        	for (int j = 0; (j < nRemain) && (12 <= is.available()); j++) {
+        	for (int j = 0; (j < nRemain) ; j++) {
             	dataArr.add(new MutableTriple<Integer, Integer, Integer>(is.readInt(), is.readInt(), is.readInt()));
             }
         	
